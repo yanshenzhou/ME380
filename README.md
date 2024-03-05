@@ -6,5 +6,5 @@ File Naming Convention:
 SUB-'Part name'
 
 TRA-
-Where SUB are transportation (TRA), dexterity (DEX) mechanisms...
+Where SUB are transportation (TRA), dexterity (DEX), (ELEC) electrical mechanisms ...
 
