@@ -1,7 +1,7 @@
 #include <Wire.h>
 #include "Adafruit_TCS34725.h"
 #include <Servo.h>
-
+#include <math.h>
 
 //initialize color sensor and servo objects
 Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
@@ -11,9 +11,10 @@ Servo servoRotateArm;
 Servo servoSpinDie;
 
 //initialize die arrays
-float diePositions[20][3]; //x, y, z coordinates of face centerpoints
+double diePositions[20][3]; //x, y, z coordinates of face centerpoints
 int diePotentials[20]; //integer potentials of each face (0, 1, 2, or 3)
-float axisVectors[3][3]; //x, y, z components of rotation vectors
+double axisVectors[5][3]; //x, y, z components of rotation vectors
+double potentialDistances[6][2]; //potentials for various distances
 
 //The following indices always refer to these colors:
 //0:Maroon, 1:Red, 2:Pink, 3:Brown, 4:Orange, 5:Apricot, 6:Yellow, 
@@ -27,21 +28,15 @@ void setup() {
   servoRotateArm.attach(4);
   servoSpinDie.attach(6);
 
-
-
 }
 
 void loop() {
 
   //reset die positions and set axis vectors
-  void arrayInitialize();
+  arrayInitialize();
 
-  //get the current position of the die
-  int seenTopFace = colorSeen();
-
-
-  //transform the array to the current position
-  
+  //orient the model by checking locations of two die faces
+  orientModel();
 
   //get the desired end color & assign potentials
   int goalColor = 17; //can be user input
@@ -54,11 +49,10 @@ void loop() {
   while(diePotentials[arrayTopFace] > 0) {
     //reset tracker
     int currentPotential = diePotentials[arrayTopFace];
-    int nextFaceIndex = 20;
 
-    for(i = 0; i < 20; i++) {
+    for(int i = 0; i < 20; i++) {
       if(diePotentials[i] == currentPotential - 1) {
-        //transform die & model to new face
+        transform(i);
       }
     }
 
@@ -70,9 +64,12 @@ void loop() {
 
   //move die back to start (after delay)
 
-
-  exit(0);
+  //stop program so it only loops once
+  while(1);
+  Serial.println("Program ended before looped again");
 }
+
+
 
 //assign a position to each face of the die, and to each rotation vector
 void arrayInitialize() {
@@ -111,9 +108,70 @@ void arrayInitialize() {
   axisVectors[0][0] = 0.982247; axisVectors[0][1] = 0; axisVectors[0][2] = 0.187592;
   axisVectors[1][0] = -0.491123; axisVectors[1][1] = 0.850651; axisVectors[1][2] = 0.187592;
   axisVectors[2][0] = -0.491123; axisVectors[2][1] = -0.850651; axisVectors[2][2] = 0.187592;
+
+  //extra axes reserved for initial model transformation (unknown axis and z axis)
+  axisVectors[3][0] = 0; axisVectors[3][1] = 0; axisVectors[3][2] = 0;
+  axisVectors[4][0] = 0; axisVectors[4][1] = 0; axisVectors[4][2] = 1;
+
 }
 
-void assignPotentials(goalColor) {
+void orientModel() {
+
+  //get top face
+  int seenTopFace = colorSeen();
+
+  //pick up die and rotate 72
+
+
+  //get second face
+  int secondSeenFace = colorSeen();
+
+  //rotate -72 and put down die
+
+
+  //transform the model to have the correct top face up
+  //get coordinates of desired top face and do cross product to find rotation axis
+  double x1 = diePositions[seenTopFace][0]; double y1 = diePositions[seenTopFace][1]; double z1 = diePositions[seenTopFace][2];
+  double x2 = 0; double y2 = 0; double z2 = 1;
+
+  double norm = sqrt(pow(x1, 2) + pow(y1, 2));
+  axisVectors[3][0] = y1 / norm;
+  axisVectors[3][1] = -1 * x1 / norm;
+  axisVectors[3][2] = 0;
+
+  //use dot product to find rotation angle
+  double dotProduct = x1 * x2 + y1 * y2 + z1 * z2;//really just =z1
+  double norm1 = sqrt(pow(x1, 2) + pow(y1, 2) + pow(z1, 2));
+  double norm2 = sqrt(pow(x2, 2) + pow(y2, 2) + pow(z2, 2));//really just =1
+  double rotation = acos(dotProduct / (norm1 * norm2));
+
+  //should have to only rotate clockwise because of cross product??, so make rotation negative
+  rotation *= -1;
+
+  rotation *= 180 / 3.14159265;
+  transformModel(3, rotation);
+
+
+  //rotate the model around z axis to align second face
+  //get coordinates of checked face, compare to expected coordinates and use dot product to find rotation angle
+  double x_1 = diePositions[secondSeenFace][0]; double y_1 = diePositions[secondSeenFace][1];
+  double x_2 = 0.127322; double y_2 = 0.934172; //original x, y coord for magenta
+  double dot_product = x_1 * x_2 + y_1 * y_2;
+  double norm_1 = sqrt(pow(x_1, 2) + pow(y_1, 2));
+  double norm_2 = sqrt(pow(x_2, 2) + pow(y_2, 2));
+  double rotationz = acos(dot_product / (norm_1 * norm_2));
+
+  //acos only returns on (0, pi) so need to make rotation negative in some cases
+  if (y_1 - x_1 * (y_2 / x_2) > 0) {
+    rotationz *= -1;
+  }
+
+  rotationz *= 180 / 3.14159265;
+  transformModel(4, rotationz);
+}
+
+//give potentials to all faces based on the desired face
+void assignPotentials(int goalColor) {
   //top: 0 (dist=0)
   //second row: 2 (dist=0.713644)
   //third row: 1 (dist=1.154700)
@@ -121,27 +179,26 @@ void assignPotentials(goalColor) {
   //fifth row: 1 (dist=1.868345)
   //bottom: 3 (dist=2)
 
-  float potentials[6][2];
-  potentials[0][0] = 0; potentials[0][1] = 0; //top face
-  potentials[1][0] = 2; potentials[1][1] = 0.713644; //top face
-  potentials[2][0] = 1; potentials[2][1] = 1.154700; //top face
-  potentials[3][0] = 2; potentials[3][1] = 1.632993; //top face
-  potentials[4][0] = 1; potentials[4][1] = 1.868345; //top face
-  potentials[5][0] = 3; potentials[5][1] = 2; //top face
+  potentialDistances[0][0] = 0; potentialDistances[0][1] = 0; //top face
+  potentialDistances[1][0] = 2; potentialDistances[1][1] = 0.713644; //top face
+  potentialDistances[2][0] = 1; potentialDistances[2][1] = 1.154700; //top face
+  potentialDistances[3][0] = 2; potentialDistances[3][1] = 1.632993; //top face
+  potentialDistances[4][0] = 1; potentialDistances[4][1] = 1.868345; //top face
+  potentialDistances[5][0] = 3; potentialDistances[5][1] = 2; //top face
 
-  float dist = 0;
-  float tol = 0.001
+  double dist = 0;
+  double tol = 0.05;
 
-  for(i = 0; i < 20; i++) {
+  for(int i = 0; i < 20; i++) {
     //distance between goal point and selected point
-    dist = sqrt(pow(diePositions[goalColor][0] - diePositions[i][0], 2)) + pow(diePositions[goalColor][1] - diePositions[i][1], 2)) + pow(diePositions[goalColor][1] - diePositions[i][1], 2)) )
+    dist = sqrt(pow(diePositions[goalColor][0] - diePositions[i][0], 2) + pow(diePositions[goalColor][1] - diePositions[i][1], 2) + pow(diePositions[goalColor][1] - diePositions[i][1], 2));
 
     //set die potential to 4 to make sure it gets changed
     diePotentials[i] = 4;
 
     //select potential based on distance
-    for(j = 0; j < 6; j++) {
-      if(dist < potentials[j][1] + tol && dist > potentials[j][1] - tol) {
+    for(int j = 0; j < 6; j++) {
+      if(dist < potentialDistances[j][1] + tol && dist > potentialDistances[j][1] - tol) {
         diePotentials[i] = potentials[j][0];
       }
     }
@@ -155,6 +212,112 @@ void assignPotentials(goalColor) {
     }
 
   }
+
+}
+
+//determine the axis of rotation and degrees of rotation
+void transform(int desiredFace) {
+  int axis; //0: first axis, 1: second axis, 2: third axis
+  int rotation; //can be 72, 144, -72, -144 degrees of rotation, CCW is +ve (looking at higher axis endpoint)
+
+  double tol = 0.1;
+  double minAcceptableDist = 0.763932;
+  double distPosEndpoint; double distNegEndpoint; double distAxis; double distFaces;
+
+  //an axis will work if neither of its endpoints touch the desired face 
+  //so, check if both endpoints are beyond "minAcceptableDist" to the face centerpoint
+  for(int i = 0; i < 3; i++) {
+
+    //calculate distance between centerpoint of desired face and nearest axis endpoint
+    distPosEndpoint = sqrt(pow(diePositions[desiredFace][0] - axisVectors[i][0], 2) + pow(diePositions[desiredFace][1] - axisVectors[i][1], 2) +pow(diePositions[desiredFace][2] - axisVectors[i][2], 2));
+    distNegEndpoint = sqrt(pow(diePositions[desiredFace][0] + axisVectors[i][0], 2) + pow(diePositions[desiredFace][1] + axisVectors[i][1], 2) +pow(diePositions[desiredFace][2] + axisVectors[i][2], 2));
+    distAxis = min(distPosEndpoint, distNegEndpoint);
+
+    if(distAxis > minAcceptableDist - tol) {
+      axis = i;
+      i = 2; //break the for loop
+    }
+  }
+
+  //get the distance from top face to desired top face to know how much to rotate by
+  distFaces = sqrt(pow(diePositions[desiredFace][0], 2) + pow(diePositions[desiredFace][1], 2) + pow(diePositions[desiredFace][1] - 1, 2));
+
+  if(distFaces > potentials[2][1] - tol && distFaces < potentials[2][1] + tol) {
+    rotation = 72;
+  }
+  else if(distFaces > potentials[4][1] - tol && distFaces < potentials[4][1] + tol) {
+    rotation = 144;
+  }
+  else {
+    Serial.println("Error: Rotation distance not calculated");
+    while (1); // halt!
+  }
+
+  //check location of desired face to know if rotation is positive or negative
+  if(axis == 0) {
+    if(diePositions[desiredFace][0] > 0) {
+      rotation = -1 * rotation;
+    }
+  }
+  else if(axis == 1 || axis == 2) {
+    if(diePositions[desiredFace][1] < 0) {
+      rotation = -1 * rotation;
+    }
+  }
+  else {
+    Serial.println("Error: Axis not found - rotation direction not calculated");
+    while (1); // halt!
+  }
+
+  //print axis and rotation (for debugging)
+  Serial.println("Axis and rotation:\t");
+  Serial.println(axis);
+  Serial.println("\t");
+  Serial.println(rotation);
+  Serial.println("\n");
+
+  transformModel(axis, rotation);
+  transformDie(axis, rotation);
+}
+
+//transform the model using given axis and rotation 
+void transformModel(int axis, double rotation) {
+
+  //get values for rotation matrix
+  double thetaRad = rotation * 3.14159265 / 180;
+  double ct = cos(thetaRad);
+  double st = sin(thetaRad);
+  double ux = axisVectors[axis][0]; double uy = axisVectors[axis][1]; double uz = axisVectors[axis][2];
+  double x; double y; double z;
+
+  double tol = 0.01;
+  double vectorNorm = sqrt(pow(ux, 2) + pow(uy, 2) + pow(uz, 2));
+  if(vectorNorm < 1 - tol || vectorNorm > 1 + tol) {
+    Serial.println("Error: rotation axis not normalized");
+    while(1);
+  }
+
+  //apply rotation matrix
+  for(int i = 0; i < 20; i++) {
+    x = diePositions[i][0]; y = diePositions[i][1]; z = diePositions[i][2];
+    diePositions[i][0] *= x*(ct + ux*ux*(1 - ct)) + y*(ux*uy*(1 - ct) - uz*st) + z*(ux*uz*(1 - ct) + uy*st);
+    diePositions[i][1] *= x*(uy*ux*(1 - ct) + uz*st) + y*(ct + uy*uy*(1 - ct)) + z*(uy*uz*(1 - ct) - ux*st);
+    diePositions[i][2] *= x*(uz*ux*(1 - ct) - uy*st) + y*(uz*uy*(1 - ct) + ux*st) + z*(ct + uz*uz*(1 - ct));
+  }
+
+}
+
+//transform the die using given axis and rotation 
+void transformDie(int axis, int rotation) {
+
+  //zero the arm servo
+  //move arm to desired axis
+  //zero the gripper servo (open) & zero the spin servo(0 or 180->144 depending on direction of rotation)
+  //grip the die
+  //raise traverse
+  //spin the die
+  //lower traverse until hard stops
+  //ungrip the die
 
 }
 
@@ -241,7 +404,7 @@ int colorSeen() {
 int getTopFace() {
   //get index of top face according to die array
   int arrayTopFace = 20;
-  for(i = 0; i < 20; i++) {
+  for(int i = 0; i < 20; i++) {
 
     //if the x and y coordinates are zero, and the z coordinate is positive, that face must be pointing up
     if(diePositions[i][0] == 0 && diePositions[i][1] == 0 && diePositions[i][2] > 0) {
@@ -250,7 +413,7 @@ int getTopFace() {
   }
 
   //check sensor reading to array, throw error if doesn't match
-  seenTopFace = colorSeen();
+  int seenTopFace = colorSeen();
   if(arrayTopFace != seenTopFace) {
     Serial.println("Top face does not match");
     while (1);
@@ -259,11 +422,10 @@ int getTopFace() {
   return arrayTopFace;
 }
 
-void rotateArm() {
+void rotateArm(int axis) {
 
 }
 
-void spinDie() {
+void spinDie(int rotation) {
 
 }
-
