@@ -1,0 +1,66 @@
+Maroon:    	X:-0.33	Y:0.58	Z:0.75
+Red:    	X:-0.87	Y:0.36	Z:0.33
+Pink:    	X:-0.13	Y:0.93	Z:-0.33
+Brown:    	X:-0.87	Y:-0.36	Z:0.33
+Orange:    	X:-0.75	Y:0.58	Z:-0.33
+Apricot:    	X:-0.67	Y:0.00	Z:-0.75
+Yellow:    	X:-0.75	Y:-0.58	Z:-0.33
+Lime:    	X:-0.13	Y:-0.93	Z:-0.33
+Green:    	X:0.13	Y:-0.93	Z:0.33
+Mint:    	X:0.33	Y:-0.58	Z:-0.75
+Teal:    	X:0.87	Y:-0.36	Z:-0.33
+Cyan:    	X:0.87	Y:0.36	Z:-0.33
+Navy:    	X:0.67	Y:0.00	Z:0.75
+Blue:    	X:0.75	Y:-0.58	Z:0.33
+Purple:    	X:0.75	Y:0.58	Z:0.33
+Lavender:    	X:0.33	Y:0.58	Z:-0.75
+Magenta:    	X:0.13	Y:0.93	Z:0.33
+Black:    	X:0.00	Y:0.00	Z:1.00
+Grey:    	X:-0.33	Y:-0.58	Z:0.75
+White:    	X:0.00	Y:0.00	Z:-1.00
+
+Orientation axis 1: 	X:-0.99	Y:0.14	Z:0.00
+Orientation rotation angle 1: -109.47
+Maroon:    	X:0.17	Y:-0.47	Z:0.19
+Red:    	X:0.84	Y:-0.09	Z:0.04
+Pink:    	X:0.03	Y:0.04	Z:-0.32
+Brown:    	X:0.72	Y:0.02	Z:-0.19
+Orange:    	X:0.59	Y:0.15	Z:-0.19
+Apricot:    	X:0.37	Y:0.00	Z:-0.12
+Yellow:    	X:0.43	Y:-0.36	Z:0.17
+Lime:    	X:-0.01	Y:-0.58	Z:0.26
+Green:    	X:0.03	Y:0.04	Z:-0.32
+Mint:    	X:0.17	Y:-0.47	Z:0.19
+Teal:    	X:0.84	Y:-0.09	Z:0.04
+Cyan:    	X:0.72	Y:0.02	Z:-0.19
+Navy:    	X:0.37	Y:0.00	Z:-0.12
+Blue:    	X:0.59	Y:0.15	Z:-0.19
+Purple:    	X:0.43	Y:-0.36	Z:0.17
+Lavender:    	X:0.11	Y:0.26	Z:-0.62
+Magenta:    	X:-0.01	Y:-0.58	Z:0.26
+Black:    	X:0.00	Y:0.00	Z:-0.33
+Grey:    	X:0.11	Y:0.26	Z:-0.62
+White:    	X:0.00	Y:0.00	Z:-0.33
+
+Orientation axis 2: 	X:0.00	Y:0.00	Z:1.00
+Orientation rotation angle 2: 67.58
+Maroon:    	X:0.09	Y:0.01	Z:0.03
+Red:    	X:0.34	Y:-0.07	Z:0.00
+Pink:    	X:-0.00	Y:0.00	Z:0.10
+Brown:    	X:0.19	Y:0.01	Z:0.03
+Orange:    	X:0.05	Y:0.09	Z:0.03
+Apricot:    	X:0.05	Y:0.00	Z:0.01
+Yellow:    	X:0.22	Y:-0.09	Z:0.03
+Lime:    	X:-0.01	Y:0.13	Z:0.07
+Green:    	X:-0.00	Y:0.00	Z:0.10
+Mint:    	X:0.09	Y:0.01	Z:0.03
+Teal:    	X:0.34	Y:-0.07	Z:0.00
+Cyan:    	X:0.19	Y:0.01	Z:0.03
+Navy:    	X:0.05	Y:0.00	Z:0.01
+Blue:    	X:0.05	Y:0.09	Z:0.03
+Purple:    	X:0.22	Y:-0.09	Z:0.03
+Lavender:    	X:-0.02	Y:0.05	Z:0.38
+Magenta:    	X:-0.01	Y:0.13	Z:0.07
+Black:    	X:0.00	Y:0.00	Z:0.11
+Grey:    	X:-0.02	Y:0.05	Z:0.38
+White:    	X:0.00	Y:0.00	Z:0.11

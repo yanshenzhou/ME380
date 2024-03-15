@@ -42,7 +42,7 @@ void loop() {
     Serial.println(" ");              // tell servo to go to position in variable 'pos'
     delay(20);                       // waits 15ms for the servo to reach the position
   }
-     for (pos_grip = 10; pos_grip <= 90; pos_grip += 1) { // goes from 180 degrees to 0 degrees
+  for (pos_grip = 10; pos_grip <= 90; pos_grip += 1) { // goes from 180 degrees to 0 degrees
     grip.write(pos_grip);  
     Serial.print(pos_grip);
     Serial.println(" ");            // tell servo to go to position in variable 'pos'

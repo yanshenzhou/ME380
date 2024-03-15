@@ -1,14 +1,5 @@
 #include <Wire.h>
-#include "Adafruit_TCS34725.h"
-#include <Servo.h>
 #include <math.h>
-
-//initialize color sensor and servo objects
-Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
-
-Servo servoGrip;
-Servo servoRotateArm;
-Servo servoSpinDie;
 
 //initialize die arrays
 double diePositions[20][3]; //x, y, z coordinates of face centerpoints
@@ -26,13 +17,7 @@ char *colorList[] = {"Maroon", "Red", "Pink", "Brown", "Orange", "Apricot", "Yel
   "Black", "Grey", "White"};
 
 void setup() {
-
-  //assign PWM pins to each servo
-  servoGrip.attach(2);
-  servoRotateArm.attach(4);
-  servoSpinDie.attach(6);
   Serial.begin(9600);
-
 }
 
 void loop() {
@@ -45,30 +30,32 @@ void loop() {
   orientModel();
 
   //get the top face from array & check against sensor
-  delay(5000);
   int arrayTopFace = getTopFace();
   
 
   //get the desired end color & assign potentials
-  int goalColor = 17; //can be user input
+  int goalColor = 9; //can be user input
   Serial.print("\nWant to get: ");
   Serial.print(colorList[goalColor]);
   assignPotentials(goalColor);
+
 
   //spin the die until the desired face is up
   while(diePotentials[arrayTopFace] > 0) {
     //reset tracker
     int currentPotential = diePotentials[arrayTopFace];
-
+    
     //check all faces of the die
     for(int i = 0; i < 20; i++) {
-      //transform to face i if it is reachable and has a lower potential
+      //transform from one face to another if it decreases the potential and can be reached from the current face
       if(diePotentials[i] == currentPotential - 1 && reachable(i)) {
-        Serial.println("Transform to: ");
-        Serial.println(colorList[i]);
+        Serial.print("\nTransform to: ");
+        Serial.print(colorList[i]);
         transform(i);
+        break;
       }
     }
+
     arrayTopFace = getTopFace();
   }
 
@@ -77,8 +64,8 @@ void loop() {
   //move die back to start (after delay)
 
   //stop program so it only loops once
-  Serial.println("Program ended before looped again");
   while(1);
+  Serial.println("Program ended before looped again");
 }
 
 
@@ -130,24 +117,21 @@ void arrayInitialize() {
 void orientModel() {
 
   //align with 0 axis and close grippers
-  //grip(1);
+  grip(1);
   
   //get top face
   //delay(10000);
-  //int seenTopFace = colorSeen();
-  int seenTopFace = 7; //give it lime for testing
+  int seenTopFace = colorSeen(); //or can manually input
 
-  //pick up die and rotate 72
+  //move upwards, and rotate 72
 
 
   //get second face
   //delay(10000);
-  //int secondSeenFace = colorSeen();
-  int secondSeenFace = 13; //give it blue for testing
+  int secondSeenFace = colorSeen(); // or can manually input
 
-  //rotate -72 and put down die
-
-  //grip(0); //commented out so that die is held for all color checks
+  //rotate -72, move downwards, release grip
+  grip(0);
 
   //transform the model to have the correct top face up
   //get coordinates of desired top face and do cross product to find rotation axis
@@ -156,7 +140,7 @@ void orientModel() {
 
   double norm = sqrt(pow(x1, 2) + pow(y1, 2));
   axisVectors[3][0] = y1 / norm;
-  axisVectors[3][1] = -1 * x1 / norm;
+  axisVectors[3][1] = -1.0 * x1 / norm;
   axisVectors[3][2] = 0;
 
   //use dot product to find rotation angle
@@ -165,7 +149,7 @@ void orientModel() {
   double norm2 = sqrt(pow(x2, 2) + pow(y2, 2) + pow(z2, 2));//really just =1
   double rotation = acos(dotProduct / (norm1 * norm2));
   
-  rotation *= 180 / 3.14159265; //convert to degrees
+  rotation *= 180.0 / 3.14159265; //convert to degrees
 
   //for debugging
   Serial.print("\nOrientation axis 1: ");
@@ -177,6 +161,7 @@ void orientModel() {
   Serial.print(axisVectors[3][2]);
   Serial.print("\nOrientation rotation angle 1: ");
   Serial.print(rotation);
+
 
   transformModel(3, rotation); //transform
 
@@ -191,10 +176,10 @@ void orientModel() {
 
   //acos only returns on (0, pi) so need to make rotation negative in some cases
   if (y_1 - x_1 * (y_2 / x_2) > 0) {
-    rotationz *= -1;
+    rotationz *= -1.0;
   }
 
-  rotationz *= 180 / 3.14159265; //convert to degrees
+  rotationz *= 180.0 / 3.14159265; //convert to degrees
   
   //for debugging
   Serial.print("\nOrientation axis 2: ");
@@ -232,7 +217,7 @@ void assignPotentials(int goalColor) {
   for(int i = 0; i < 20; i++) {
     //distance between goal point and selected point
     dist = sqrt(pow(diePositions[goalColor][0] - diePositions[i][0], 2) + pow(diePositions[goalColor][1] - diePositions[i][1], 2) + pow(diePositions[goalColor][2] - diePositions[i][2], 2));
-
+    
     //set die potential to 4 to make sure it gets changed
     diePotentials[i] = 4;
 
@@ -243,16 +228,20 @@ void assignPotentials(int goalColor) {
       }
     }
 
-    Serial.println("\n");
-    Serial.println(colorList[i]);
-    Serial.println(": Potential is ");
-    Serial.println(diePotentials[i], 4);
+    Serial.print("\n");
+    Serial.print(colorList[i]);
+    Serial.print(": Distance is ");
+    Serial.print(dist, 4);
+    Serial.print(": Potential is ");
+    Serial.print(diePotentials[i]);
 
     //throw error if potential did not apply
     if(diePotentials[i] == 4) {
       while(1);
     }
+
   }
+
 }
 
 //determine the axis of rotation and degrees of rotation
@@ -261,7 +250,7 @@ void transform(int desiredFace) {
   int rotation; //can be 72, 144, -72, -144 degrees of rotation, CCW is +ve (looking at higher axis endpoint)
 
   double tol = 0.1;
-  double minAcceptableDist = 0.763932;
+  double minAcceptableDist = 0.763932; //distance from a face center to its points
   double distPosEndpoint; double distNegEndpoint; double distAxis; double distFaces;
 
   //an axis will work if neither of its endpoints touch the desired face 
@@ -294,14 +283,20 @@ void transform(int desiredFace) {
   }
 
   //check location of desired face to know if rotation is positive or negative
-  if(axis == 0 && diePositions[desiredFace][1] < 0 - tol) {
-    rotation *= -1;
+  if(axis == 0) {
+    if(diePositions[desiredFace][1] < 0 - tol) {
+      rotation *= -1;
+    }
   }
-  else if(axis == 1 && diePositions[desiredFace][0] > 0 + tol) {
-    rotation *= -1;
+  else if(axis == 1) {
+    if(diePositions[desiredFace][0] > 0 + tol) {
+      rotation *= -1;
+    }
   }
-  else if(axis == 2  && diePositions[desiredFace][1] < 0 - tol) {
-    rotation *= -1;
+  else if(axis == 2) {
+    if(diePositions[desiredFace][1] < 0 - tol) {
+      rotation *= -1;
+    }
   }
   else {
     Serial.println("Error: Axis not found - rotation direction not calculated");
@@ -311,13 +306,11 @@ void transform(int desiredFace) {
   //print axis and rotation (for debugging)
   Serial.println("\n");
   Serial.println("Axis and rotation:\t");
-  Serial.println(axis);
-  Serial.println("\t");
+  Serial.print(axis);
+  Serial.print("\t");
   Serial.println(rotation);
-  Serial.println("\n");
 
   transformModel(axis, rotation);
-  transformDie(axis, rotation);
 }
 
 //transform the model using given axis and rotation 
@@ -345,99 +338,7 @@ void transformModel(int axis, double rotation) {
     diePositions[i][2] = x*(uz*ux*(1 - ct) - uy*st) + y*(uz*uy*(1 - ct) + ux*st) + z*(ct + uz*uz*(1 - ct));
   }
 
-  outputDiePositions();
-}
-
-//transform the die using given axis and rotation 
-void transformDie(int axis, int rotation) {
-
-  //zero the arm servo
-  //move arm to desired axis
-  //zero the gripper servo (open) & zero the spin servo(0 or 180->144 depending on direction of rotation)
-  //grip the die
-  //raise traverse
-  //spin the die
-  //lower traverse until hard stops
-  //ungrip the die
-
-}
-
-//return a value 0-19 to correspond to a color
-int colorSeen() {
-  
-  delay(200);
-
-  //turn on color sensor, check if on
-  Serial.begin(9600);
-  if (tcs.begin()) {
-    Serial.println("Found sensor");
-  } else {
-    Serial.println("No TCS34725 found ... check your connections");
-    while (1); // halt!
-  }
-
-  //initialize RGB and color name arrays
-  int rgb[20][3];
-  char *colors[20];
-  
-  char *colorList[] = {"Maroon", "Red", "Pink", "Brown", "Orange", "Apricot", "Yellow", 
-  "Lime", "Green", "Mint", "Teal", "Cyan", "Navy", "Blue", "Purple", "Lavender", "Magenta",
-  "Black", "Grey", "White"};
-  
-  for (int i = 0; i < 20; i++){
-    colors[i] = colorList[i];
-  }
-  
-  rgb[0][0] = 96; rgb[0][1] = 110; rgb[0][2] = 101; //Maroon
-  rgb[1][0] = 166; rgb[1][1] = 124; rgb[1][2] = 112; //Red
-  rgb[2][0] = 236; rgb[2][1] = 218; rgb[2][2] = 207; //Pink
-  rgb[3][0] = 130; rgb[3][1] = 150; rgb[3][2] = 125; //Brown
-  rgb[4][0] = 210; rgb[4][1] = 167; rgb[4][2] = 132; //Orange
-  rgb[5][0] = 252; rgb[5][1] = 280; rgb[5][2] = 210; //Apricot
-  rgb[6][0] = 252; rgb[6][1] = 269; rgb[6][2] = 156; //Yellow
-  rgb[7][0] = 156; rgb[7][1] = 231; rgb[7][2] = 151; //Lime
-  rgb[8][0] = 85; rgb[8][1] = 154; rgb[8][2] = 118; //Green
-  rgb[9][0] = 207; rgb[9][1] = 322; rgb[9][2] = 243; //Mint
-  rgb[10][0] = 88; rgb[10][1] = 166; rgb[10][2] = 157; //Teal
-  rgb[11][0] = 130; rgb[11][1] = 237; rgb[11][2] = 231; //Cyan
-  rgb[12][0] = 72; rgb[12][1] = 123; rgb[12][2] = 125; //Navy
-  rgb[13][0] = 81; rgb[13][1] = 143; rgb[13][2] = 155; //Blue
-  rgb[14][0] = 86; rgb[14][1] = 129; rgb[14][2] = 137; //Purple
-  rgb[15][0] = 166; rgb[15][1] = 240; rgb[15][2] = 254; //Lavender
-  rgb[16][0] = 128; rgb[16][1] = 138; rgb[16][2] = 143; //Magenta
-  rgb[17][0] = 71; rgb[17][1] = 113; rgb[17][2] = 101; //Black
-  rgb[18][0] = 125; rgb[18][1] = 175; rgb[18][2] = 151; //Grey
-  rgb[19][0] = 276; rgb[19][1] = 358; rgb[19][2] = 310; //White
-
-  //read colors
-  int red, green, blue, clear;
-  tcs.setInterrupt(false); // turn on LED
-  delay (60); // wait to read
-  tcs.getRawData(&red, &green, &blue, &clear);
-  tcs.setInterrupt(true); // turn off LED
-  red = int(red); green = int(green); blue = int(blue); clear = int(clear);
-
-  double dist; double bestDist = 10000;
-  int bestDistIndex = 0;
-
-  for (int i = 0; i < 20; i++) {
-    dist = sqrt(pow((red - rgb[i][0]), 2) + pow((green - rgb[i][1]), 2) + pow((blue - rgb[i][2]), 2));
-    
-    if(dist < bestDist) {
-      bestDist = dist;
-      bestDistIndex = i;
-    }
-  }
-
-  //print color (for debugging)
-  Serial.print("R:\t"); Serial.print(int(red)); 
-  Serial.print("\tG:\t"); Serial.print(int(green)); 
-  Serial.print("\tB:\t"); Serial.print(int(blue));
-  Serial.print("\n");
-  Serial.print("This is: "); Serial.print(colors[bestDistIndex]);
-  Serial.print("\n");
-
-  return bestDistIndex;
+  outputDiePositions(); //check result
 }
 
 //get index of top face according to die array and check against sensor
@@ -445,66 +346,25 @@ int getTopFace() {
   //get index of top face according to die array
   int arrayTopFace = 20;
   for(int i = 0; i < 20; i++) {
+
     //if the x and y coordinates are zero, and the z coordinate is positive, that face must be pointing up
     if(diePositions[i][2] > 0.99) {
       arrayTopFace = i;
     }
   }
+  
   if(arrayTopFace == 20) {
     Serial.println("Top face not calculated ");
     while(1);
   }
 
-
-  //check sensor reading to array, throw error if doesn't match
-  int seenTopFace = colorSeen();
-  if(arrayTopFace != seenTopFace) {
-    Serial.println("Top face does not match");
-    while (1);
-  }
-  
   Serial.println("\n");
   Serial.print(colorList[arrayTopFace]);
   Serial.print(" is on top");
-
   return arrayTopFace;
 }
 
-void rotateArm(int axis) {
-
-}
-
-void spinDie(int rotation) {
-
-}
-
-void grip(int close) {
-
-  int pos = 0;
-
-  if (close == 1) {
-    Serial.println("\nClosing gripper..");
-    //make sure the spinner is aligned properly
-
-    //open grippers to 180 degree position (fully open)
-    servoGrip.write(180);
-    delay(2000);
-
-    //close grippers to 130 degree position (closed)
-    for (pos = 180; pos >= 90; pos -= 1) { // goes from 0 degrees to 180 degrees
-      servoGrip.write(pos);              // tell servo to go to position in variable 'pos'
-      delay(15);                       // waits 15 ms for the servo to reach the position
-    }
-  }
-
-  else {
-    Serial.println("\nOpening gripper..");
-    //open grippers to 180 degree position (fully open)
-    servoGrip.write(180);
-  }
-  
-}
-
+//output x, y, z coords for each face (for debugging)
 void outputDiePositions() {
   for(int i = 0; i < 20; i++) {
     Serial.print("\n");
