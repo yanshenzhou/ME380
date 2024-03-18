@@ -25,12 +25,28 @@ char *colorList[] = {"Maroon", "Red", "Pink", "Brown", "Orange", "Apricot", "Yel
   "Lime", "Green", "Mint", "Teal", "Cyan", "Navy", "Blue", "Purple", "Lavender", "Magenta",
   "Black", "Grey", "White"};
 
+int gripPos = 90; //position of gripper servo for die fully gripped
+
+//assign variables for each arduino pin
+int servoGripPin = 2; int servoRotateArmPin = 3; int servoSpinDiePin = 4;
+int xMotorPin1 = 22; int xMotorPin2 = 24; int zMotorPin1 = 26; int zMotorPin2 = 28;
+int xMotorCtrlPin = 8; int zMotorCtrlPin = 9;
+
 void setup() {
 
   //assign PWM pins to each servo
-  servoGrip.attach(2);
-  servoRotateArm.attach(4);
-  servoSpinDie.attach(6);
+  servoGrip.attach(servoGripPin);
+  servoRotateArm.attach(servoRotateArmPin);
+  servoSpinDie.attach(servoSpinDiePin);
+
+  //assign pins to motor controls
+  pinMode(xMotorPin1, OUTPUT);
+  pinMode(xMotorPin2, OUTPUT);
+  pinMode(zMotorPin1, OUTPUT);
+  pinMode(zMotorPin2, OUTPUT);
+  pinMode(xMotorCtrlPin, OUTPUT);
+  pinMode(zMotorCtrlPin, OUTPUT);
+
   Serial.begin(9600);
 
 }
@@ -48,7 +64,6 @@ void loop() {
   delay(5000);
   int arrayTopFace = getTopFace();
   
-
   //get the desired end color & assign potentials
   int goalColor = 17; //can be user input
   Serial.print("\nWant to get: ");
@@ -72,7 +87,7 @@ void loop() {
     arrayTopFace = getTopFace();
   }
 
-  //move die to finish
+  //move die to finish (move in x, rotate arm to not hit the platform, move in z, ungrip)
 
   //move die back to start (after delay)
 
@@ -127,6 +142,7 @@ void arrayInitialize() {
 
 }
 
+//update the positions of each die face in code to match reality
 void orientModel() {
 
   //align with 0 axis and close grippers
@@ -470,41 +486,115 @@ int getTopFace() {
   return arrayTopFace;
 }
 
+//move the arm between axes
 void rotateArm(int axis) {
+  //note: the arm should be aligned with the 0 axis at 0 position
+  
+  //go to 0 position (**is this necessary??**)
+  servoRotateArm.write(0);//how to avoid arm jerking back to baseline?
 
+  //if axis 0, done. if axis 1, go to 60. if axis 2, go to 120
+  int rotation = axis*60;
+  for(pos = 0; pos <= rotation; pos++) {
+    servoSpinDie.write(pos);
+    delay(15);
+  }
 }
 
+//spin the die from one face to another
 void spinDie(int rotation) {
+  //note: the driving cup should be set to align with die for 0 position
 
+  int pos = 0;
+  //if +ve rotation, go to 0, grip, then spin
+  if(rotation > 0) {
+    servospinDie.write(0);
+    grip(true);
+    for(pos = 0; pos <= rotation; pos++) {
+      servoSpinDie.write(pos);
+      delay(15);
+    }
+  }
+  //if -ve rotation, go to 180(**is this necessary??**), then 144, grip, then spin
+  else {
+    servoSpinDie.write(180);
+    for(pos = 180; pos >= 144; pos--) {
+      servoSpinDie.write(pos);
+      delay(15);
+    }
+    grip(true);
+    for(pos = 144; pos >= (144 - rotation); pos--) {
+      servoSpinDie.write(pos);
+      delay(15);
+    }
+  }
 }
 
-void grip(int close) {
+//grip or un-grip the grippers (note: does not align the gripper with die)
+void grip(bool close) {
 
   int pos = 0;
 
-  if (close == 1) {
+  if (close) {
     Serial.println("\nClosing gripper..");
-    //make sure the spinner is aligned properly
-
     //open grippers to 180 degree position (fully open)
     servoGrip.write(180);
     delay(2000);
 
     //close grippers to 130 degree position (closed)
-    for (pos = 180; pos >= 90; pos -= 1) { // goes from 0 degrees to 180 degrees
-      servoGrip.write(pos);              // tell servo to go to position in variable 'pos'
-      delay(15);                       // waits 15 ms for the servo to reach the position
+    for (pos = 180; pos >= gripPos; pos--) { 
+      servoGrip.write(pos);
+      delay(15);
     }
   }
 
   else {
     Serial.println("\nOpening gripper..");
     //open grippers to 180 degree position (fully open)
-    servoGrip.write(180);
+    for (pos = gripPos; pos <= 180; pos--) { 
+      servoGrip.write(pos);
+      delay(15);
+    }
   }
   
 }
 
+//move in x or z direction a distance
+//currently no speed ramping being used
+void motorMove(bool xOrZ, int dist) {
+  //calculate how long the motor should be on
+  int maxRpm = 200;
+  int rpm = 200;
+  int dutyCycle = 255 * (rpm/maxRpm); 
+  double speed = (rpm/60)*(25.4/20); //(rev/sec) * (25.4mm/in) / (20 threads/in)
+  double timeOn = (dist / speed); //dist in mm, speed in mm/s
+
+  //default to operate z motor, if bool xOrZ is true then do x motor
+  int pin1 = zMotorPin1; int pin2 = zMotorPin2; int pinCtrl = zMotorCtrlPin;
+  if(xOrZ) {
+    pin1 = xMotorPin1; pin2 = xMotorPin2; pinCtrl = xMotorPinCtrl;
+  }
+
+  //default pin values to spin motor forwards, flip if moving in -ve direction
+  int pin1Val = 1; int pin2Val = 0;
+  if(dist < 0) {
+    pin1Val = 0;
+    pin2Val = 1;
+  }
+
+  //operate the motor
+  analogWrite(pinCtrl, dutyCycle)
+  digitalWrite(pin1, pin1Val);
+  digitalWrite(pin2, pin2Val);
+
+  //turn off the motor after delay
+  delay(timeOn*1000);
+  digitalWrite(pin1, 0);
+  digitalWrite(pin2, 0);
+
+}
+
+//output x,y,z position of each die face for debugging
 void outputDiePositions() {
   for(int i = 0; i < 20; i++) {
     Serial.print("\n");
