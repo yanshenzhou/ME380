@@ -39,16 +39,7 @@ void loop() {
 
   
   
-  for(int i = 0; i < 3; i++) {
-    servoRotateArm.write(0);
-    int rotation = i*60;
-    for(int pos = 0; pos <= rotation; pos++) {
-      servoRotateArm.write(pos);
-      delay(30);
-      
-    }
-    Serial.println(i);
-  }
+      servoRotateArm.write(0);
 
   
 

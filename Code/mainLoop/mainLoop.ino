@@ -30,7 +30,7 @@ int spinDist = 10; //how far to move die in z to spin it (** should move in x or
 
 //assign variables for each arduino pin
 int servoGripPin = 2; int servoRotateArmPin = 3; int servoSpinDiePin = 4;
-int xMotorPin1 = 22; int xMotorPin2 = 23; int zMotorPin1 = 26; int zMotorPin2 = 27;
+int xMotorPin1 = 27; int xMotorPin2 = 26; int zMotorPin1 = 22; int zMotorPin2 = 23;
 int xMotorCtrlPin = 8; int zMotorCtrlPin = 9;
 int xOptoPin = A10; int zOptoPin = A11;
 
@@ -147,10 +147,10 @@ void arrayInitialize() {
 
 
   //x, y, z component for each vector
-  //vector 0: pointing forward, vector 1: pointing back and right, vector 2: pointing back and left
+  //vector 0: pointing forward, vector 1: pointing back and left, vector 2: pointing back and right
   axisVectors[0][0] = 0.982247; axisVectors[0][1] = 0; axisVectors[0][2] = 0.187592;
-  axisVectors[1][0] = -0.491123; axisVectors[1][1] = 0.850651; axisVectors[1][2] = 0.187592;
-  axisVectors[2][0] = -0.491123; axisVectors[2][1] = -0.850651; axisVectors[2][2] = 0.187592;
+  axisVectors[1][0] = -0.491123; axisVectors[1][1] = -0.850651; axisVectors[1][2] = 0.187592;
+  axisVectors[2][0] = -0.491123; axisVectors[2][1] = 0.850651; axisVectors[2][2] = 0.187592;
 
   //extra axes reserved for initial model transformation (unknown axis and z axis)
   axisVectors[3][0] = 0; axisVectors[3][1] = 0; axisVectors[3][2] = 0;
@@ -567,12 +567,11 @@ void grip(bool close) {
   
 }
 
-//move in x or z direction a distance (or until an opto is hit)
-//currently no speed ramping being used (maybe should use a torque spring?)
-void motorMove(bool xMove, int dist) {
-  //calculate how long the motor should be on
-  double speed = (200/60)*(25.4/20); //(rev/sec) * (25.4mm/in) / (20 threads/in)
-  double timeOn = (dist / speed); //dist in mm, speed in mm/s
+
+//run for a certain time (+ve and -ve are different directions) (0.01s increments)
+//for z, +ve time is up
+//for x, +ve time is up
+void motorMove(bool xMove, double time) {
 
   //default to operate z motor, if bool xMove is true then do x motor
   int pin1 = zMotorPin1; int pin2 = zMotorPin2; int pinCtrl = zMotorCtrlPin; int pinOpto = zOptoPin;
@@ -582,28 +581,36 @@ void motorMove(bool xMove, int dist) {
 
   //default pin values to spin motor forwards, flip if moving in -ve direction
   int pin1Val = 1; int pin2Val = 0;
-  if(dist < 0) {
+  if(time < 0) {
     pin1Val = 0;
     pin2Val = 1;
+    Serial.println("flipping to down");
   }
-
+  
   //operate the motor
   analogWrite(pinCtrl, 255);
   digitalWrite(pin1, pin1Val);
   digitalWrite(pin2, pin2Val);
 
+  if(pin1Val > pin2Val) {
+    Serial.println("Moving up");
+  }
+  else if (pin1Val < pin2Val) {
+    Serial.println("Moving down");
+  }
+  else {
+    Serial.println("pins equal, not moving");
+  }
   //turn off the motor when opto is hit or enough time has passed
-  Serial.println("Moving motor!");
   int timeCounter = 0;
-  while(timeCounter < timeOn*1000 && analogRead(pinOpto) < 300) {
-    delay(1);
-    timeCounter++;
+  while(timeCounter < abs(time)*1000) {
+    delay(10);
+    timeCounter += 10;
   }
   digitalWrite(pin1, 0);
   digitalWrite(pin2, 0);
 
 }
-
 //output x,y,z position of each die face for debugging
 void outputDiePositions() {
   for(int i = 0; i < 20; i++) {
