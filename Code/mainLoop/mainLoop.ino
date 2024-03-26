@@ -25,29 +25,35 @@ char *colorList[] = {"Maroon", "Red", "Pink", "Brown", "Orange", "Apricot", "Yel
   "Lime", "Green", "Mint", "Teal", "Cyan", "Navy", "Blue", "Purple", "Lavender", "Magenta",
   "Black", "Grey", "White"};
 
-int gripPos = 90; //position of gripper servo for die fully gripped
-int spinDist = 10; //how far to move die in z to spin it (** should move in x or z??**)
+int gripPos = 97; //position of gripper servo for die fully gripped
 
 //assign variables for each arduino pin
 int servoGripPin = 2; int servoRotateArmPin = 3; int servoSpinDiePin = 4;
-int xMotorPin1 = 27; int xMotorPin2 = 26; int zMotorPin1 = 22; int zMotorPin2 = 23;
-int xMotorCtrlPin = 8; int zMotorCtrlPin = 9;
-int xOptoPin = A10; int zOptoPin = A11;
+int xMotorPin1 = 29; int xMotorPin2 = 28; int zMotorPin1 = 23; int zMotorPin2 = 22;
+//int xMotorCtrlPin = 8; int zMotorCtrlPin = 9;
 
 void setup() {
 
-  //assign PWM pins to each servo
+  //assign PWM pins to each servo, default to home position
   servoGrip.attach(servoGripPin);
   servoRotateArm.attach(servoRotateArmPin);
   servoSpinDie.attach(servoSpinDiePin);
+  servoGrip.write(180);
+  servoRotateArm.write(0);
+  servoSpinDie.write(0);
+  delay(2000);
 
-  //assign pins to motor controls
+  //assign pins to motor controls, default to home position
   pinMode(xMotorPin1, OUTPUT);
   pinMode(xMotorPin2, OUTPUT);
   pinMode(zMotorPin1, OUTPUT);
   pinMode(zMotorPin2, OUTPUT);
-  pinMode(xMotorCtrlPin, OUTPUT);
-  pinMode(zMotorCtrlPin, OUTPUT);
+  digitalWrite(xMotorPin1, 0);
+  digitalWrite(xMotorPin2, 0); 
+  digitalWrite(zMotorPin1, 0);
+  digitalWrite(zMotorPin2, 0);
+  //pinMode(xMotorCtrlPin, OUTPUT);
+  //pinMode(zMotorCtrlPin, OUTPUT);
 
   Serial.begin(9600);
 
@@ -62,7 +68,6 @@ void setup() {
 }
 
 void loop() {
-
   //reset die positions and set axis vectors
   arrayInitialize();
   outputDiePositions();
@@ -88,7 +93,7 @@ void loop() {
     for(int i = 0; i < 20; i++) {
       //transform to face i if it is reachable and has a lower potential
       if(diePotentials[i] == currentPotential - 1 && reachable(i)) {
-        Serial.println("Transform to: ");
+        Serial.println("\nTransform to: ");
         Serial.println(colorList[i]);
         transform(i);
         break;
@@ -98,17 +103,24 @@ void loop() {
   }
 
   //move die to finish (move in x, rotate arm to not hit the platform, move in z, ungrip)
-  motorMove(true, 350);
-  motorMove(false, -20);
+  motorMove(false, 5);//move up in z all the way
+  motorMove(true, 40);//move halfway to finish
+  rotateArm(0);//align arm away from platform
+  motorMove(true, 100);//move die to finish
+  motorMove(false, -1);//move down in z until hit platform
   grip(false);
 
   //move die back to start (after delay)
   delay(20000);
-  motorMove(true, -350);
+  motorMove(false, 1);
+  motorMove(true, -150);
   delay(20000);
 
   //stop program so it only loops once
   Serial.println("Program ended before looped again");
+  servoGrip.detach();
+  servoSpinDie.detach();
+  servoRotateArm.detach();
   while(1);
 }
 
@@ -164,31 +176,35 @@ void orientModel() {
   //get top and second faces
   delay(2000);
   servoRotateArm.write(0);
-  int seenTopFace = colorSeen(); //get top face
-  spinDie(72); //pick up, move up, spin
-  int secondSeenFace = colorSeen(); //get second face
-  motorMove(true, -spinDist); //move back down
-  for(int pos = 72; pos >= 0; pos--) { //spin die the other way
+  //int seenTopFace = colorSeen(); //get top face
+  //spinDie(72); //pick up, move up, spin
+  //int secondSeenFace = colorSeen(); //get second face
+  //for(int pos = 72; pos >= 0; pos--) { //spin die the other way
       //servoSpinDie.write(pos);
       //delay(15);
-  }
-  grip(false);
- // int seenTopFace = 4;
- // int secondSeenFace = 19;
+  //}
+  //motorMove(false, -2); //move back down
+  //grip(false);
+  int seenTopFace = 1;
+  int secondSeenFace = 2;
 
   //transform the model to have the correct top face up
   //get coordinates of desired top face and do cross product to find rotation axis
   double x1 = diePositions[seenTopFace][0]; double y1 = diePositions[seenTopFace][1]; double z1 = diePositions[seenTopFace][2];
   double x2 = 0; double y2 = 0; double z2 = 1;
-
-  Serial.println(x1);
-  Serial.println(y1);
-  Serial.println(z1);
-
   double norm = sqrt(pow(x1, 2) + pow(y1, 2));
-  axisVectors[3][0] = y1 / norm;
-  axisVectors[3][1] = -1 * x1 / norm;
-  axisVectors[3][2] = 0;
+
+  //assign a rotation axis. if norm equals 0, the vectors are parallel, so set the rotation axis to x-axis
+  if(norm > 0.01) {
+    axisVectors[3][0] = y1 / norm;
+    axisVectors[3][1] = -1 * x1 / norm;
+    axisVectors[3][2] = 0;
+  }
+  else {
+    axisVectors[3][0] = 1;
+    axisVectors[3][1] = 0;
+    axisVectors[3][2] = 0;
+  }
 
   //use dot product to find rotation angle
   double dotProduct = x1 * x2 + y1 * y2 + z1 * z2;//really just =z1
@@ -250,12 +266,12 @@ void assignPotentials(int goalColor) {
   //fifth row: 1 (dist=1.868345)
   //bottom: 3 (dist=2)
 
-  potentialDistances[0][0] = 0; potentialDistances[0][1] = 0; //top face
-  potentialDistances[1][0] = 2; potentialDistances[1][1] = 0.713644; //top face
-  potentialDistances[2][0] = 1; potentialDistances[2][1] = 1.154700; //top face
-  potentialDistances[3][0] = 2; potentialDistances[3][1] = 1.632993; //top face
-  potentialDistances[4][0] = 1; potentialDistances[4][1] = 1.868345; //top face
-  potentialDistances[5][0] = 3; potentialDistances[5][1] = 2; //top face
+  potentialDistances[0][0] = 0; potentialDistances[0][1] = 0; 
+  potentialDistances[1][0] = 2; potentialDistances[1][1] = 0.713644; 
+  potentialDistances[2][0] = 1; potentialDistances[2][1] = 1.154700; 
+  potentialDistances[3][0] = 2; potentialDistances[3][1] = 1.632993;
+  potentialDistances[4][0] = 1; potentialDistances[4][1] = 1.868345;
+  potentialDistances[5][0] = 3; potentialDistances[5][1] = 2;
 
   double dist = 0;
   double tol = 0.05;
@@ -312,8 +328,11 @@ void transform(int desiredFace) {
 
   //get the distance from top face to desired top face to know how much to rotate by
   distFaces = sqrt(pow(diePositions[desiredFace][0], 2) + pow(diePositions[desiredFace][1], 2) + pow(diePositions[desiredFace][2] - 1, 2));
+  Serial.print("Distance between faces: ");
+  Serial.println(distFaces);
 
   if(distFaces > potentialDistances[2][1] - tol && distFaces < potentialDistances[2][1] + tol) {
+    Serial.println("spinning 72 deg");
     rotation = 72;
   }
   else if(distFaces > potentialDistances[4][1] - tol && distFaces < potentialDistances[4][1] + tol) {
@@ -388,15 +407,18 @@ void transformModel(int axis, double rotation) {
 //transform the die using given axis and rotation 
 void transformDie(int axis, int rotation) {
   rotateArm(axis);//move arm to axis
+  delay(200);
   spinDie(rotation);//grip die, move up, and spin
-  motorMove(true, -spinDist);//move back down
+  delay(200);
+  motorMove(false, -3);//move back down in z for 2 seconds
+  delay(200);
   grip(false);//ungrip
 }
 
 //return a value 0-19 to correspond to a color
 int colorSeen() {
   
-  delay(100);
+  delay(500);
 
   //initialize RGB and color name arrays
   int rgb[20][3];
@@ -410,26 +432,26 @@ int colorSeen() {
     colors[i] = colorList[i];
   }
   
-  rgb[0][0] = 96; rgb[0][1] = 110; rgb[0][2] = 101; //Maroon
-  rgb[1][0] = 166; rgb[1][1] = 124; rgb[1][2] = 112; //Red
-  rgb[2][0] = 236; rgb[2][1] = 218; rgb[2][2] = 207; //Pink
-  rgb[3][0] = 130; rgb[3][1] = 150; rgb[3][2] = 125; //Brown
-  rgb[4][0] = 210; rgb[4][1] = 167; rgb[4][2] = 132; //Orange
-  rgb[5][0] = 252; rgb[5][1] = 280; rgb[5][2] = 210; //Apricot
-  rgb[6][0] = 252; rgb[6][1] = 269; rgb[6][2] = 156; //Yellow
-  rgb[7][0] = 156; rgb[7][1] = 231; rgb[7][2] = 151; //Lime
-  rgb[8][0] = 85; rgb[8][1] = 154; rgb[8][2] = 118; //Green
-  rgb[9][0] = 207; rgb[9][1] = 322; rgb[9][2] = 243; //Mint
-  rgb[10][0] = 88; rgb[10][1] = 166; rgb[10][2] = 157; //Teal
-  rgb[11][0] = 130; rgb[11][1] = 237; rgb[11][2] = 231; //Cyan
-  rgb[12][0] = 72; rgb[12][1] = 123; rgb[12][2] = 125; //Navy
-  rgb[13][0] = 81; rgb[13][1] = 143; rgb[13][2] = 155; //Blue
-  rgb[14][0] = 86; rgb[14][1] = 129; rgb[14][2] = 137; //Purple
-  rgb[15][0] = 166; rgb[15][1] = 240; rgb[15][2] = 254; //Lavender
-  rgb[16][0] = 128; rgb[16][1] = 138; rgb[16][2] = 143; //Magenta
-  rgb[17][0] = 71; rgb[17][1] = 113; rgb[17][2] = 101; //Black
-  rgb[18][0] = 125; rgb[18][1] = 175; rgb[18][2] = 151; //Grey
-  rgb[19][0] = 276; rgb[19][1] = 358; rgb[19][2] = 310; //White
+  rgb[0][0] = 203; rgb[0][1] = 212; rgb[0][2] = 195; //Maroon
+  rgb[1][0] = 391; rgb[1][1] = 241; rgb[1][2] = 221; //Red
+  rgb[2][0] = 516; rgb[2][1] = 450; rgb[2][2] = 440; //Pink
+  rgb[3][0] = 287; rgb[3][1] = 295; rgb[3][2] = 236; //Brown
+  rgb[4][0] = 500; rgb[4][1] = 347; rgb[4][2] = 271; //Orange
+  rgb[5][0] = 569; rgb[5][1] = 593; rgb[5][2] = 455; //Apricot
+  rgb[6][0] = 580; rgb[6][1] = 560; rgb[6][2] = 327; //Yellow
+  rgb[7][0] = 384; rgb[7][1] = 599; rgb[7][2] = 299; //Lime
+  rgb[8][0] = 176; rgb[8][1] = 295; rgb[8][2] = 224; //Green
+  rgb[9][0] = 440; rgb[9][1] = 650; rgb[9][2] = 496; //Mint
+  rgb[10][0] = 186; rgb[10][1] = 326; rgb[10][2] = 299; //Teal
+  rgb[11][0] = 273; rgb[11][1] = 471; rgb[11][2] = 471; //Cyan
+  rgb[12][0] = 131; rgb[12][1] = 224; rgb[12][2] = 222; //Navy
+  rgb[13][0] = 156; rgb[13][1] = 267; rgb[13][2] = 302; //Blue
+  rgb[14][0] = 161; rgb[14][1] = 236; rgb[14][2] = 257; //Purple
+  rgb[15][0] = 337; rgb[15][1] = 454; rgb[15][2] = 499; //Lavender
+  rgb[16][0] = 273; rgb[16][1] = 256; rgb[16][2] = 278; //Magenta
+  rgb[17][0] = 135; rgb[17][1] = 196; rgb[17][2] = 176; //Black
+  rgb[18][0] = 240; rgb[18][1] = 349; rgb[18][2] = 303; //Grey
+  rgb[19][0] = 660; rgb[19][1] = 801; rgb[19][2] = 700; //White
 
   //read colors
   int red, green, blue, clear;
@@ -452,12 +474,12 @@ int colorSeen() {
   }
 
   //print color (for debugging)
-  Serial.print("R:\t"); Serial.print(int(red)); 
+  Serial.print("\nR:\t"); Serial.print(int(red)); 
   Serial.print("\tG:\t"); Serial.print(int(green)); 
   Serial.print("\tB:\t"); Serial.print(int(blue));
   Serial.print("\n");
-  Serial.print("This is: "); Serial.print(colors[bestDistIndex]);
-  Serial.print("\n");
+  Serial.print("This is: "); 
+  Serial.println(colors[bestDistIndex]);
 
   return bestDistIndex;
 }
@@ -496,14 +518,30 @@ int getTopFace() {
 //move the arm between axes
 void rotateArm(int axis) {
   //note: the arm should be aligned with the 0 axis at 0 position
-  Serial.println("moving arm");
+  Serial.print("Moving arm to axis ");
   Serial.println(axis);
 
+  int prevRotation = servoRotateArm.read();
+
   //if axis 0, done. if axis 1, go to 60. if axis 2, go to 120
-  int rotation = axis*60;
-  for(int pos = 0; pos <= rotation; pos++) {
-    servoRotateArm.write(pos);
-    delay(30);
+  int rotation = axis*65;
+
+  if(rotation > prevRotation) {
+    Serial.println("Moving arm CCW");
+    for(int pos = prevRotation; pos <= rotation; pos++) {
+      servoRotateArm.write(pos);
+      delay(20);
+    }
+  }
+  else if(rotation < prevRotation) {
+    Serial.println("Moving arm CW");
+    for(int pos = prevRotation; pos >= rotation; pos--) {
+      servoRotateArm.write(pos);
+      delay(20);
+    }
+  }
+  else {
+    Serial.println("Arm already in position");
   }
 }
 
@@ -512,27 +550,27 @@ void spinDie(int rotation) {
   //note: the driving cup should be set to align with die for 0 position
 
   int pos = 0;
+  Serial.print("spinning die ");
+  Serial.println(rotation);
   //if +ve rotation, go to 0, grip, then spin
   if(rotation > 0) {
-    servoSpinDie.write(0);
-    grip(true);
-    motorMove(true, spinDist);
+    servoSpinDie.write(0);//make sure the grippers are aligned
+    grip(true);//close the grippers
+    motorMove(false, 3);//move up in z for 2 seconds
     for(pos = 0; pos <= rotation; pos++) {
-      servoSpinDie.write(pos);
+      servoSpinDie.write(pos);//increment gripper position
+      servoGrip.write(gripPos);//keep grippers closed
       delay(15);
     }
   }
-  //if -ve rotation, go to 180(**is this necessary??**), then 144, grip, then spin
+  //if -ve rotation, go to 144, grip, then spin
   else {
-    servoSpinDie.write(180);
-    for(pos = 180; pos >= 144; pos--) {
-      servoSpinDie.write(pos);
-      delay(15);
-    }
-    grip(true);
-    motorMove(false, 20);
+    servoSpinDie.write(144);//make sure the grippers are aligned
+    grip(true);//close grippers
+    motorMove(false, 3);
     for(pos = 144; pos >= (144 - rotation); pos--) {
-      servoSpinDie.write(pos);
+      servoSpinDie.write(pos);//increment gripper position
+      servoGrip.write(gripPos);//keep grippers closed
       delay(15);
     }
   }
@@ -545,11 +583,7 @@ void grip(bool close) {
 
   if (close) {
     Serial.println("\nClosing gripper..");
-    //open grippers to 180 degree position (fully open)
-    servoGrip.write(180);
-    delay(2000);
-
-    //close grippers to 130 degree position (closed)
+    //close grippers to 100 degree position (closed)
     for (pos = 180; pos >= gripPos; pos--) { 
       servoGrip.write(pos);
       delay(15);
@@ -567,50 +601,53 @@ void grip(bool close) {
   
 }
 
-
-//run for a certain time (+ve and -ve are different directions) (0.01s increments)
-//for z, +ve time is up
-//for x, +ve time is up
+//run for a certain time (+ve and -ve are different directions) (0.05s increments)
+//for x and z, +ve time is moving up
 void motorMove(bool xMove, double time) {
 
   //default to operate z motor, if bool xMove is true then do x motor
-  int pin1 = zMotorPin1; int pin2 = zMotorPin2; int pinCtrl = zMotorCtrlPin; int pinOpto = zOptoPin;
+  int pin1 = zMotorPin1; int pin2 = zMotorPin2; //int pinCtrl = zMotorCtrlPin; int pinOpto = zOptoPin;
   if(xMove) {
-    pin1 = xMotorPin1; pin2 = xMotorPin2; pinCtrl = xMotorCtrlPin; pinOpto = xOptoPin;
+    pin1 = xMotorPin1; pin2 = xMotorPin2; //pinCtrl = xMotorCtrlPin; pinOpto = xOptoPin;
   }
 
   //default pin values to spin motor forwards, flip if moving in -ve direction
-  int pin1Val = 1; int pin2Val = 0;
+  int pin1Val = 1; int pin2Val = 1;
   if(time < 0) {
-    pin1Val = 0;
-    pin2Val = 1;
-    Serial.println("flipping to down");
+    //pin1Val = 0; uncomment when switch back h bridge
+    pin2Val = 0;
   }
   
   //operate the motor
-  analogWrite(pinCtrl, 255);
+  //analogWrite(pinCtrl, 255);
   digitalWrite(pin1, pin1Val);
   digitalWrite(pin2, pin2Val);
 
-  if(pin1Val > pin2Val) {
-    Serial.println("Moving up");
-  }
-  else if (pin1Val < pin2Val) {
-    Serial.println("Moving down");
-  }
-  else {
-    Serial.println("pins equal, not moving");
-  }
+  //print out the direction of movement
+  if(pin1Val > pin2Val) {Serial.print("Moving up");}
+  else if (pin1Val < pin2Val) {Serial.print("Moving down");}
+  else {Serial.print("Pins equal, not moving");}
+  if(xMove) {Serial.println(" in X");}
+  else {Serial.println(" in Z");}
+
   //turn off the motor when opto is hit or enough time has passed
   int timeCounter = 0;
-  while(timeCounter < abs(time)*1000) {
-    delay(10);
-    timeCounter += 10;
+  while(timeCounter < abs(time)*1000) { 
+    if(analogRead(A2) > 200 && xMove) {
+      Serial.println("opto triggered");
+      break; //for x motion, turn off motor when opto is tripped
+    }
+    servoGrip.write(gripPos);//keep grippers closed
+    delay(100);//delay to continue moving the motor
+    timeCounter += 100;//increment counter
   }
+  
+  //turn off motor by writing 0 to both pins
   digitalWrite(pin1, 0);
   digitalWrite(pin2, 0);
 
 }
+
 //output x,y,z position of each die face for debugging
 void outputDiePositions() {
   for(int i = 0; i < 20; i++) {
