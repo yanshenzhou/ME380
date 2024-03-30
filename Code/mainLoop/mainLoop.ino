@@ -29,7 +29,7 @@ int gripPos = 80; //position of gripper servo for die fully gripped
 
 //assign variables for each arduino pin
 int servoGripPin = 2; int servoRotateArmPin = 3; int servoSpinDiePin = 4;
-int xMotorPin1 = 29; int xMotorPin2 = 28; int zMotorPin1 = 23; int zMotorPin2 = 22;
+int xMotorPin1 = 35; int xMotorPin2 = 34; int zMotorPin1 = 23; int zMotorPin2 = 22;
 //int xMotorCtrlPin = 8; int zMotorCtrlPin = 9;
 
 void setup() {
@@ -68,10 +68,21 @@ void setup() {
 
 
 void loop() {
-  rotateArm(1);
-  while(1);
+  //servoGrip.write(50);
+  //servoRotateArm.write(10);
+  //motorMove(false, false, -0.25);//move up in z all the way
+  //delay(1000);
+  //motorMove(false, false, -5.3);//move up in z all the way
+  //motorMove(true, true, 15);//move up in z all the way
+  //motorMove(true, false, -40);//move up in z all the way
+  //motorMove(true, false, 10);//move up in z all the way
+  //while(1);
+
+
   //allow time to terminate the program (move arm a bit to let you know it's time to cancel)
+  /*
   for(int i = 0; i < 10; i++) {
+    
     if(analogRead(A2) > 200) {
       Serial.println("Opto triggered to stop program");
       while(1);
@@ -87,7 +98,7 @@ void loop() {
     }
     delay(100);
   }
-
+  */
   //reset die positions and set axis vectors
   arrayInitialize();
   outputDiePositions();
@@ -100,7 +111,7 @@ void loop() {
   int arrayTopFace = getTopFace();
   
   //get the desired end color & assign potentials
-  int goalColor = 17; //can be user input
+  int goalColor = 17; //can be user input, choosing black
   Serial.print("\nWant to get: ");
   Serial.print(colorList[goalColor]);
   assignPotentials(goalColor);
@@ -117,17 +128,32 @@ void loop() {
         Serial.println("\nTransform to: ");
         Serial.println(colorList[i]);
         transform(i);
-        break;
+        i = 20;
       }
     }
+
+    //get the new top face, if the top face should be the goal face, check the color sensor
     arrayTopFace = getTopFace();
+    if(diePotentials[arrayTopFace] == 0) {
+      int finalCheckColor = colorSeen();
+
+      //if the seen top face isn't black, start dexterity again
+      if(finalCheckColor != goalFace) {
+        Serial.println("Black not on top as expected, running again");
+        arrayInitialize();
+        orientModel();
+        arrayTopFace = getTopFace();
+
+      }
+      Serial.println("Black on top, moving die to finish!");
+    }
   }
 
   //move die to finish (move in x, rotate arm to not hit the platform, move in z, ungrip)
   delay(500);
-  motorMove(false, true, 5.7);//move up in z all the way
+  motorMove(false, true, 5.5);//move up in z all the way
   motorMove(true, true, 60);//move halfway to finish
-  servoRotateArm.write(30);//align arm away from platform
+  servoRotateArm.write(0);//align arm away from platform
   delay(500);
   motorMove(true, true, 58);//move die to finish
   motorMove(false, true, -1);//move down in z until hit platform
@@ -136,9 +162,10 @@ void loop() {
 
   //move die back to start (after delay)
   delay(20000);
-  motorMove(false, false, 1);
+  //motorMove(false, false, 0.5);
   motorMove(true, false, -118);//move die back to start
-  motorMove(false, false, -4.8);
+  delay(1000);
+  motorMove(false, false, -3.9);
   delay(500);
   grip(false);
   rotateArm(0);
@@ -199,21 +226,34 @@ void arrayInitialize() {
 //update the positions of each die face in code to match reality
 void orientModel() {
   
-  //get top and second faces
-  delay(2000);
-  servoRotateArm.write(0);
-  grip(true);
-  int seenTopFace = colorSeen(); //get top face
-  grip(false);
-  delay(300);
-  spinDie(72); //pick up, move up, spin
-  int secondSeenFace = colorSeen(); //get second face
-  for(int pos = 72; pos >= 0; pos--) { //spin die the other way
-      servoSpinDie.write(pos);
-      delay(15);
+  int seenTopFace = 0; int secondSeenFace = 0;
+  double distSeenFaces = 0; double tol = 0.05; double dx = 0; double dy = 0; double dz = 0;
+
+  //use while loop to ensure the seen faces make sense
+  while(distSeenFaces < potentialDistances[2][1] - tol || distSeenFaces > potentialDistances[2][1] + tol) {
+    //get top and second faces
+    delay(2000);
+    servoRotateArm.write(0);
+    grip(true);
+    seenTopFace = colorSeen(); //get top face
+    grip(false);
+    delay(300);
+    spinDie(75); //pick up, move up, spin
+    secondSeenFace = colorSeen(); //get second face
+    for(int pos = 75; pos >= 0; pos--) { //spin die the other way
+        servoSpinDie.write(pos);
+        delay(15);
+    }
+    motorMove(false, true, -2.8); //move back down
+    grip(false);
+
+    //get distance between seen faces to make sure it makes sense
+    dx = diePositions[seenTopFace][0] - diePositions[secondSeenFace][0];
+    dy = diePositions[seenTopFace][1] - diePositions[secondSeenFace][1];
+    dz = diePositions[seenTopFace][2] - diePositions[secondSeenFace][2];
+    distSeenFaces = sqrt(dx*dx + dy*dy + dz*dz);
   }
-  motorMove(false, true, -2.8); //move back down
-  grip(false);
+  
   //int seenTopFace = 1;
   //int secondSeenFace = 2;
 
@@ -351,7 +391,7 @@ void transform(int desiredFace) {
 
     if(distAxis > minAcceptableDist - tol) {
       axis = i;
-      break; //break the for loop
+      i = 4; //break the for loop
     }
   }
 
@@ -377,13 +417,13 @@ void transform(int desiredFace) {
       rotation *= -1; 
     }
   }
-  else if(axis == 2) {
+  else if(axis == 1) {
     if(diePositions[desiredFace][0] < 0 - tol) {
       rotation *= -1;
     }
   }
-  else if(axis == 1) {
-    if(diePositions[desiredFace][1] > 0 + tol) {
+  else if(axis == 2) {
+    if(diePositions[desiredFace][0] > 0 + tol) {
       rotation *= -1;
     }
   }
@@ -438,7 +478,7 @@ void transformDie(int axis, int rotation) {
   delay(200);
   spinDie(rotation);//grip die, move up, and spin
   delay(200);
-  motorMove(false, true, -2.8);//move back down in z for 2 seconds
+  motorMove(false, true, -2.9);//move back down in z for 2 seconds
   delay(500);
   grip(false);//ungrip
 }
@@ -483,11 +523,19 @@ int colorSeen() {
 
   //read colors
   int red, green, blue, clear;
-  tcs.setInterrupt(false); // turn on LED
-  delay (60); // wait to read
-  tcs.getRawData(&red, &green, &blue, &clear);
-  tcs.setInterrupt(true); // turn off LED
-  red = int(red); green = int(green); blue = int(blue); clear = int(clear);
+  double totalRed = 0; double totalBlue = 0; double totalGreen = 0;
+
+  //use for loop to take average of 3 samples
+  for(int j = 0; j < 3; j++) {
+    tcs.setInterrupt(false); // turn on LED
+    delay (60); // wait to read
+    tcs.getRawData(&red, &green, &blue, &clear);
+    tcs.setInterrupt(true); // turn off LED
+    red = int(red); green = int(green); blue = int(blue); clear = int(clear);
+    totalRed += red; totalGreen += green; totalBlue += blue;
+  }
+  
+  red = int(totalRed/3); green = int(totalGreen/3); blue = int(totalBlue/3);
 
   double dist; double bestDist = 10000;
   int bestDistIndex = 0;
@@ -640,10 +688,10 @@ void motorMove(bool xMove, bool grip, double time) {
   }
 
   //default pin values to spin motor forwards, flip if moving in -ve direction
-  int pin1Val = 1; int pin2Val = 1;
+  int pin1Val = 1; int pin2Val = 0;
   if(time < 0) {
-    //pin1Val = 0; uncomment when switch back h bridge
-    pin2Val = 0;
+    pin1Val = 0; 
+    pin2Val = 1;
   }
   
   //operate the motor
@@ -660,13 +708,16 @@ void motorMove(bool xMove, bool grip, double time) {
 
   //turn off the motor when opto is hit or enough time has passed
   double timeCounter = 0;
+  if(xMove) {
+    delay(5000);
+  }
   while(timeCounter < abs(time)*10.0) { 
-    
     if(analogRead(A2) > 200 && xMove) {
       Serial.println(analogRead(A2));
       Serial.println("opto triggered");
       break; //for x motion, turn off motor when opto is tripped
     }
+  
     if(grip) {
       servoGrip.write(gripPos);//keep grippers closed
     }
