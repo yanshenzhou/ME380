@@ -74,31 +74,14 @@ void loop() {
   //delay(1000);
   //motorMove(false, false, -5.3);//move up in z all the way
   //motorMove(true, true, 15);//move up in z all the way
-  //motorMove(true, false, -40);//move up in z all the way
+  //motorMove(true, false, -200);//move up in z all the way
   //motorMove(true, false, 10);//move up in z all the way
+
+  //while(1) {
+  //  int colorread = colorSeen();
+  //}
   //while(1);
 
-
-  //allow time to terminate the program (move arm a bit to let you know it's time to cancel)
-  /*
-  for(int i = 0; i < 10; i++) {
-    
-    if(analogRead(A2) > 200) {
-      Serial.println("Opto triggered to stop program");
-      while(1);
-    }
-    for(int pos = 0; pos <= 5; pos++) {
-      servoRotateArm.write(pos);
-      delay(50);
-    }
-    delay(100);
-    for(int pos = 5; pos <= 0; pos--) {
-      servoRotateArm.write(pos);
-      delay(50);
-    }
-    delay(100);
-  }
-  */
   //reset die positions and set axis vectors
   arrayInitialize();
   outputDiePositions();
@@ -138,45 +121,48 @@ void loop() {
       int finalCheckColor = colorSeen();
 
       //if the seen top face isn't black, start dexterity again
-      if(finalCheckColor != goalFace) {
+      if(finalCheckColor != 17) {
         Serial.println("Black not on top as expected, running again");
         arrayInitialize();
         orientModel();
         arrayTopFace = getTopFace();
 
       }
-      Serial.println("Black on top, moving die to finish!");
+      else {
+        Serial.println("Black on top, moving die to finish!");
+      }
+      
     }
   }
 
   //move die to finish (move in x, rotate arm to not hit the platform, move in z, ungrip)
-  delay(500);
+  delay(2000);
+  grip(true);
   motorMove(false, true, 5.5);//move up in z all the way
-  motorMove(true, true, 60);//move halfway to finish
-  servoRotateArm.write(0);//align arm away from platform
+  motorMove(true, true, 10);//move halfway to finish
+  rotateArm(0);//align arm away from platform
   delay(500);
-  motorMove(true, true, 58);//move die to finish
-  motorMove(false, true, -1);//move down in z until hit platform
+  motorMove(true, true, 130);//move die to finish
+  motorMove(false, true, -1.5);//move down in z until hit platform
   delay(500);
   grip(false);
 
   //move die back to start (after delay)
-  delay(20000);
+  delay(3000);
   //motorMove(false, false, 0.5);
-  motorMove(true, false, -118);//move die back to start
+  motorMove(true, false, -140);//move die back to start
   delay(1000);
-  motorMove(false, false, -3.9);
+  motorMove(false, false, -3.4);
   delay(500);
   grip(false);
-  rotateArm(0);
-  delay(20000);
+  delay(5000);
 
-  //stop program so it only loops once
+  /*//stop program so it only loops once
   Serial.println("Program ended before looped again");
   servoGrip.detach();
   servoSpinDie.detach();
   servoRotateArm.detach();
-  while(1);
+  while(1);*/
 }
 
 //assign a position to each face of the die, and to each rotation vector
@@ -227,10 +213,10 @@ void arrayInitialize() {
 void orientModel() {
   
   int seenTopFace = 0; int secondSeenFace = 0;
-  double distSeenFaces = 0; double tol = 0.05; double dx = 0; double dy = 0; double dz = 0;
+  double distSeenFaces = 0; double tol = 0.1; double dx = 0; double dy = 0; double dz = 0;
 
   //use while loop to ensure the seen faces make sense
-  while(distSeenFaces < potentialDistances[2][1] - tol || distSeenFaces > potentialDistances[2][1] + tol) {
+  //while(distSeenFaces < potentialDistances[2][1] - tol || distSeenFaces > potentialDistances[2][1] + tol) {
     //get top and second faces
     delay(2000);
     servoRotateArm.write(0);
@@ -238,6 +224,9 @@ void orientModel() {
     seenTopFace = colorSeen(); //get top face
     grip(false);
     delay(300);
+    if(seenTopFace == 17) {
+      return;
+    }
     spinDie(75); //pick up, move up, spin
     secondSeenFace = colorSeen(); //get second face
     for(int pos = 75; pos >= 0; pos--) { //spin die the other way
@@ -252,7 +241,7 @@ void orientModel() {
     dy = diePositions[seenTopFace][1] - diePositions[secondSeenFace][1];
     dz = diePositions[seenTopFace][2] - diePositions[secondSeenFace][2];
     distSeenFaces = sqrt(dx*dx + dy*dy + dz*dz);
-  }
+  //}
   
   //int seenTopFace = 1;
   //int secondSeenFace = 2;
@@ -528,7 +517,7 @@ int colorSeen() {
   //use for loop to take average of 3 samples
   for(int j = 0; j < 3; j++) {
     tcs.setInterrupt(false); // turn on LED
-    delay (60); // wait to read
+    delay(60); // wait to read
     tcs.getRawData(&red, &green, &blue, &clear);
     tcs.setInterrupt(true); // turn off LED
     red = int(red); green = int(green); blue = int(blue); clear = int(clear);
